@@ -48,6 +48,9 @@ const DEFAULT_FORM = {
   isActive: true,
   storeDescription: "",
 
+  customDomain: "",
+  customDomainStatus: "",
+
   storeLogo: "",
   themeColor: "#128c7e",
   buttonColor: "#128c7e",
@@ -111,6 +114,38 @@ function normalizeSlug(value) {
     .replace(/[^a-z0-9-]/g, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function normalizeCustomDomain(value = "") {
+  return String(value || "")
+    .replace("https://", "")
+    .replace("http://", "")
+    .split("/")[0]
+    .toLowerCase()
+    .trim()
+    .replace(/\/$/, "");
+}
+
+function isReservedDomain(domain) {
+  const cleanDomain = normalizeCustomDomain(domain);
+
+  const reservedDomains = [
+    "app.qartlo.com",
+    "qartlo.com",
+    "www.qartlo.com",
+    "localhost",
+    "127.0.0.1",
+  ];
+
+  return reservedDomains.includes(cleanDomain);
+}
+
+function isValidDomain(domain) {
+  const cleanDomain = normalizeCustomDomain(domain);
+
+  if (!cleanDomain) return true;
+
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleanDomain);
 }
 
 function normalizeCategoryName(value) {
@@ -190,7 +225,7 @@ function SectionSaveButton({ onClick, loading, label = "Save" }) {
   );
 }
 
-function SectionNotice({ type = "success", message }) {
+function InlineSectionNotice({ type = "success", message }) {
   if (!message) return null;
 
   const styles =
@@ -199,9 +234,7 @@ function SectionNotice({ type = "success", message }) {
       : "border-green-200 bg-green-50 text-green-700";
 
   return (
-    <div
-      className={`mt-5 rounded-2xl border px-4 py-3 text-sm font-medium ${styles}`}
-    >
+    <div className={`rounded-2xl border px-4 py-2 text-xs font-semibold ${styles}`}>
       {message}
     </div>
   );
@@ -448,6 +481,13 @@ export default function AdminSettingsPage() {
             storeData?.description ||
             "",
 
+          customDomain:
+            storeData?.primaryDomain ||
+            (Array.isArray(storeData?.customDomains)
+              ? storeData.customDomains[0] || ""
+              : ""),
+          customDomainStatus: storeData?.customDomainStatus || "",
+
           storeLogo: privateData?.branding?.storeLogo || "",
           themeColor: privateData?.branding?.themeColor || "#128c7e",
           buttonColor: privateData?.branding?.buttonColor || "#128c7e",
@@ -494,6 +534,9 @@ export default function AdminSettingsPage() {
           codEnabled: privateData?.paymentMethods?.codEnabled !== false,
           bankTransferEnabled:
             privateData?.paymentMethods?.bankTransferEnabled === true,
+
+          acceptOrdersNow:
+            privateData?.storeTimings?.acceptOrdersNow ?? true,
 
           webhooks: {
             wh1: {
@@ -896,6 +939,46 @@ export default function AdminSettingsPage() {
       }
     }
 
+    if (sectionKey === "domain") {
+      const cleanDomain = normalizeCustomDomain(form.customDomain);
+
+      if (cleanDomain && !isValidDomain(cleanDomain)) {
+        setSectionError("domain", "Enter a valid domain like shop.yourdomain.com.");
+        return false;
+      }
+
+      if (cleanDomain && isReservedDomain(cleanDomain)) {
+        setSectionError(
+          "domain",
+          "This domain is reserved and cannot be used as a custom store domain."
+        );
+        return false;
+      }
+
+      if (cleanDomain) {
+        const storesRef = collection(db, "stores");
+        const domainQuery = query(
+          storesRef,
+          where("customDomains", "array-contains", cleanDomain),
+          limit(1)
+        );
+
+        const domainSnap = await getDocs(domainQuery);
+
+        if (!domainSnap.empty) {
+          const conflictingDoc = domainSnap.docs.find((d) => d.id !== store.id);
+
+          if (conflictingDoc) {
+            setSectionError(
+              "domain",
+              "This custom domain is already connected to another store."
+            );
+            return false;
+          }
+        }
+      }
+    }
+
     if (sectionKey === "catalog") {
       if (!validateCategoriesBeforeSave()) {
         return false;
@@ -945,6 +1028,9 @@ export default function AdminSettingsPage() {
             ownerId: user.uid,
             businessType: form.businessType.trim(),
             storeDescription: form.storeDescription.trim(),
+            storeTimings: {
+              acceptOrdersNow: form.acceptOrdersNow,
+            },
           },
           { merge: true }
         );
@@ -969,6 +1055,34 @@ export default function AdminSettingsPage() {
           slug: cleanSlug,
           phone: cleanPhone,
           address: cleanAddress,
+        }));
+      }
+
+      if (sectionKey === "domain") {
+        const cleanDomain = normalizeCustomDomain(form.customDomain);
+
+        await updateDoc(storeRef, {
+          customDomains: cleanDomain ? [cleanDomain] : [],
+          primaryDomain: cleanDomain,
+          customDomainStatus: cleanDomain ? "pending" : "",
+          updatedAt: serverTimestamp(),
+        });
+
+        setStore((prev) =>
+          prev
+            ? {
+                ...prev,
+                customDomains: cleanDomain ? [cleanDomain] : [],
+                primaryDomain: cleanDomain,
+                customDomainStatus: cleanDomain ? "pending" : "",
+              }
+            : prev
+        );
+
+        setForm((prev) => ({
+          ...prev,
+          customDomain: cleanDomain,
+          customDomainStatus: cleanDomain ? "pending" : "",
         }));
       }
 
@@ -1244,6 +1358,22 @@ export default function AdminSettingsPage() {
     };
   }, [form.razorpayKeyId, form.razorpayMode]);
 
+  function SectionActions({ sectionKey, label }) {
+    const notice = sectionMessages?.[sectionKey];
+
+    return (
+      <div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-end">
+        <InlineSectionNotice type={notice?.type} message={notice?.message} />
+
+        <SectionSaveButton
+          onClick={() => saveSection(sectionKey)}
+          loading={savingSection === sectionKey}
+          label={label}
+        />
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="p-6 text-sm text-gray-500">Loading settings...</div>;
   }
@@ -1322,7 +1452,7 @@ export default function AdminSettingsPage() {
 
         {!privateDocExists ? (
           <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Advanced settings are being stored in <strong>store_private</strong>.
+            Click on <strong>Save </strong> button to save the settings.
           </div>
         ) : null}
 
@@ -1336,13 +1466,7 @@ export default function AdminSettingsPage() {
           <SectionCard
             title="1. Store Profile"
             subtitle="Basic store identity and contact information"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("profile")}
-                loading={savingSection === "profile"}
-                label="Save Profile"
-              />
-            }
+            right={<SectionActions sectionKey="profile" label="Save Profile" />}
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Store Name">
@@ -1432,23 +1556,142 @@ export default function AdminSettingsPage() {
                 onChange={(value) => setValue("acceptOrdersNow", value)}
               />
             </div>
-
-            <SectionNotice
-              type={sectionMessages.profile?.type}
-              message={sectionMessages.profile?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="2. Branding & Appearance"
+            title="2. Custom Domain Setup"
+            subtitle="Connect your own domain to this store"
+            right={<SectionActions sectionKey="domain" label="Save Domain" />}
+          >
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-semibold">Current Store Link</p>
+              <p className="mt-1 break-all font-bold">
+                https://app.qartlo.com/{normalizeSlug(form.slug || "your-store-slug")}
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_220px]">
+              <Field
+                label="Custom Domain"
+                hint="Do not add https:// or http://. Example: shop.yourdomain.com"
+              >
+                <Input
+                  type="text"
+                  name="customDomain"
+                  value={form.customDomain}
+                  onChange={(e) => {
+                    clearSectionMessage("domain");
+                    setValue("customDomain", normalizeCustomDomain(e.target.value));
+                  }}
+                  placeholder="shop.yourdomain.com"
+                />
+              </Field>
+
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Status
+                </p>
+                <p
+                  className={`mt-2 text-lg font-bold ${
+                    form.customDomainStatus === "connected"
+                      ? "text-green-600"
+                      : form.customDomainStatus === "pending"
+                      ? "text-amber-600"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {form.customDomainStatus === "connected"
+                    ? "Connected"
+                    : form.customDomainStatus === "pending"
+                    ? "Pending"
+                    : "Not Connected"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
+              <h3 className="font-bold text-blue-950">How to connect your domain</h3>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="font-semibold">Step 1: Open your domain provider</p>
+                  <p className="mt-1 text-blue-800">
+                    Go to GoDaddy, Hostinger, Namecheap, Cloudflare, or wherever your domain was purchased.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Step 2: Open DNS settings</p>
+                  <p className="mt-1 text-blue-800">
+                    Find DNS Management, DNS Records, or Manage DNS.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Step 3: Add DNS record</p>
+
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-blue-100 bg-white">
+                    <div className="grid grid-cols-3 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold uppercase text-blue-700">
+                      <span>Type</span>
+                      <span>Name</span>
+                      <span>Value</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 px-4 py-3 text-xs text-gray-700">
+                      <span className="font-semibold">CNAME</span>
+                      <span>shop</span>
+                      <span className="break-all">Firebase hosting target</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
+                      <span className="font-semibold">CNAME</span>
+                      <span>www</span>
+                      <span className="break-all">Firebase hosting target</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
+                      <span className="font-semibold">A</span>
+                      <span>@</span>
+                      <span className="break-all">Firebase provided IP records</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Step 4: Save domain here</p>
+                  <p className="mt-1 text-blue-800">
+                    Enter only the domain name above and click Save Domain.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Step 5: Wait for verification</p>
+                  <p className="mt-1 text-blue-800">
+                    DNS updates can take a few minutes to 24 hours.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                <p className="font-semibold">Correct</p>
+                <p className="mt-1 font-mono text-xs">shop.yourdomain.com</p>
+                <p className="mt-1 font-mono text-xs">www.yourdomain.com</p>
+              </div>
+
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <p className="font-semibold">Wrong</p>
+                <p className="mt-1 font-mono text-xs">https://shop.yourdomain.com/</p>
+                <p className="mt-1 font-mono text-xs">app.qartlo.com</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="3. Branding & Appearance"
             subtitle="Visual identity for your storefront"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("branding")}
-                loading={savingSection === "branding"}
-                label="Save Branding"
-              />
-            }
+            right={<SectionActions sectionKey="branding" label="Save Branding" />}
           >
             <div className="grid gap-4 md:grid-cols-2">
               <ImageUploadField
@@ -1531,18 +1774,18 @@ export default function AdminSettingsPage() {
                 </Select>
               </Field>
             </div>
-
-            <SectionNotice
-              type={sectionMessages.branding?.type}
-              message={sectionMessages.branding?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="3. Catalog Settings"
+            title="4. Catalog Settings"
             subtitle="Control categories, browsing and product listing behavior"
             right={
               <div className="flex flex-wrap items-center gap-3">
+                <InlineSectionNotice
+                  type={sectionMessages.catalog?.type}
+                  message={sectionMessages.catalog?.message}
+                />
+
                 <div className="rounded-full bg-[#e8f5ee] px-3 py-1 text-xs font-semibold text-[#128c7e]">
                   {form.customCategories.length} categories
                 </div>
@@ -1609,9 +1852,7 @@ export default function AdminSettingsPage() {
               ) : (
                 form.customCategories.map((category, index) => (
                   <div
-                    key={`${
-                      category.id || category.slug || category.name
-                    }-${index}`}
+                    key={`${category.id || category.slug || category.name}-${index}`}
                     className="grid gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-[72px_1fr_180px]"
                   >
                     <div className="flex items-center justify-center rounded-2xl bg-white text-2xl">
@@ -1712,23 +1953,12 @@ export default function AdminSettingsPage() {
                 {categoryError}
               </div>
             ) : null}
-
-            <SectionNotice
-              type={sectionMessages.catalog?.type}
-              message={sectionMessages.catalog?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="4. Order & Checkout Settings"
+            title="5. Order & Checkout Settings"
             subtitle="Control checkout rules and order behavior"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("order")}
-                loading={savingSection === "order"}
-                label="Save Order"
-              />
-            }
+            right={<SectionActions sectionKey="order" label="Save Order" />}
           >
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Field label="Minimum Order Amount">
@@ -1761,23 +1991,12 @@ export default function AdminSettingsPage() {
                 />
               </Field>
             </div>
-
-            <SectionNotice
-              type={sectionMessages.order?.type}
-              message={sectionMessages.order?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="5. Delivery Settings"
+            title="6. Delivery Settings"
             subtitle="Control delivery charge and notes"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("delivery")}
-                loading={savingSection === "delivery"}
-                label="Save Delivery"
-              />
-            }
+            right={<SectionActions sectionKey="delivery" label="Save Delivery" />}
           >
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Field label="Delivery Charge">
@@ -1812,28 +2031,14 @@ export default function AdminSettingsPage() {
                 />
               </Field>
             </div>
-
-            <SectionNotice
-              type={sectionMessages.delivery?.type}
-              message={sectionMessages.delivery?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="6. Payments"
+            title="7. Payments"
             subtitle="Configure online and offline payment methods"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("payments")}
-                loading={savingSection === "payments"}
-                label="Save Payments"
-              />
-            }
+            right={<SectionActions sectionKey="payments" label="Save Payments" />}
           >
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Connect Razorpay using your Key ID and private secret. Only the
-              Key ID is stored publicly. Sensitive keys remain private.
-            </div>
+            
 
             <div className="mt-4">
               <ToggleRow
@@ -1904,23 +2109,12 @@ export default function AdminSettingsPage() {
                 onChange={(value) => setValue("codEnabled", value)}
               />
             </div>
-
-            <SectionNotice
-              type={sectionMessages.payments?.type}
-              message={sectionMessages.payments?.message}
-            />
           </SectionCard>
 
           <SectionCard
-            title="7. Notifications & Webhooks"
+            title="8. Notifications & Webhooks"
             subtitle="Customer and admin notification preferences"
-            right={
-              <SectionSaveButton
-                onClick={() => saveSection("webhooks")}
-                loading={savingSection === "webhooks"}
-                label="Save Webhooks"
-              />
-            }
+            right={<SectionActions sectionKey="webhooks" label="Save Webhooks" />}
           >
             <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
               Paste cURL from Wylto, Interakt, Wati, AiSensy, Gupshup, 2Factor
@@ -2043,11 +2237,6 @@ export default function AdminSettingsPage() {
                 </div>
               ))}
             </div>
-
-            <SectionNotice
-              type={sectionMessages.webhooks?.type}
-              message={sectionMessages.webhooks?.message}
-            />
           </SectionCard>
         </div>
       </div>

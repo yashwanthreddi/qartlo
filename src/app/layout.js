@@ -25,6 +25,9 @@ export const metadata = {
     statusBarStyle: "default",
     title: "Qartlo",
   },
+};
+
+export const viewport = {
   themeColor: "#25d366",
 };
 
