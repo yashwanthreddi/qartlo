@@ -1,57 +1,58 @@
 runConfig:
   minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
 
 env:
+  # Firebase Client Config (SAFE for frontend)
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyAuQNCcI4zPBJemLJ-D-_2sk7lADWqEss4"
+    value: "AIzaSyAx2EmuyN7feRleB4cy-M2hVCrB7JuS8Tw"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "store-v2-11c28.firebaseapp.com"
+    value: "qartlo-v2.firebaseapp.com"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "store-v2-11c28"
+    value: "qartlo-v2"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "store-v2-11c28.firebasestorage.app"
+    value: "qartlo-v2.firebasestorage.app"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "1029949261297"
+    value: "1047062624639"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "1:1029949261297:web:28b756bac5b1bfcea3b050"
+    value: "1:1047062624639:web:07633a79f39bb2f245c24a"
     availability:
       - BUILD
       - RUNTIME
 
+  # Internal server config (NON-SENSITIVE)
   - variable: FIREBASE_PROJECT_ID
-    value: "store-v2-11c28"
+    value: "qartlo-v2"
     availability:
       - BUILD
       - RUNTIME
 
+  # Payment PUBLIC KEY only (safe)
   - variable: RAZORPAY_KEY_ID
-    value: "rzp_test_ScFNpbautCILEs"
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: RAZORPAY_KEY_SECRET
-    value: "NL03tZZPaNhbCFO505r3oUk7"
+    value: "rzp_test_xxxxxxxx"
     availability:
       - BUILD
       - RUNTIME

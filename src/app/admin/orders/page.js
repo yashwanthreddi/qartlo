@@ -16,12 +16,7 @@ const ORDER_STATUS_OPTIONS = [
   "cancelled",
 ];
 
-const PAYMENT_STATUS_OPTIONS = [
-  "pending",
-  "created",
-  "paid",
-  "failed",
-];
+const PAYMENT_STATUS_OPTIONS = ["pending", "created", "paid", "failed"];
 
 function StatCard({ label, value, accent = "text-gray-900", subtext = "" }) {
   return (
@@ -200,19 +195,26 @@ export default function AdminOrdersPage() {
     const storeOrders = await getOrdersByStoreId(storeId);
     setOrders(Array.isArray(storeOrders) ? storeOrders : []);
   };
-
   const triggerStatusWebhook = async (orderId) => {
-    try {
-      await fetch("/api/order-status-webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ orderId }),
-      });
-    } catch (err) {
-      console.error("Status webhook trigger failed:", err);
+    const response = await fetch("/api/order-status-webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ orderId }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || data?.success === false) {
+      throw new Error(
+        data?.webhookError ||
+          data?.error ||
+          "Order status webhook trigger failed",
+      );
     }
+
+    return data;
   };
 
   const handleStatusUpdate = async (orderId, field, value) => {
@@ -227,13 +229,24 @@ export default function AdminOrdersPage() {
         [field]: value,
       });
 
-      await triggerStatusWebhook(orderId);
+      const webhookResult = await triggerStatusWebhook(orderId);
+
       await refreshOrders(store.id);
 
-      setSuccess("Order updated successfully.");
+      setSuccess(
+        webhookResult?.webhookTriggered
+          ? "Order updated successfully and webhook triggered."
+          : "Order updated successfully, but webhook was not triggered.",
+      );
     } catch (err) {
       console.error("Order update error:", err);
-      setError("Failed to update order.");
+
+      setError(
+        err?.message ||
+          "Order updated, but webhook trigger failed. Please check webhook settings.",
+      );
+
+      await refreshOrders(store.id);
     } finally {
       setUpdatingId("");
     }
@@ -254,11 +267,19 @@ export default function AdminOrdersPage() {
         String(customerName).toLowerCase().includes(term) ||
         String(customerPhone).toLowerCase().includes(term) ||
         String(customerAddress).toLowerCase().includes(term) ||
-        String(order?.paymentStatus || "").toLowerCase().includes(term) ||
-        String(orderStatus || "").toLowerCase().includes(term) ||
-        String(order?.paymentMethod || "").toLowerCase().includes(term) ||
-        String(order?.id || "").toLowerCase().includes(term);
-       
+        String(order?.paymentStatus || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(orderStatus || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(order?.paymentMethod || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(order?.id || "")
+          .toLowerCase()
+          .includes(term);
+
       const matchesStatus =
         statusFilter === "all" ||
         String(orderStatus || "").toLowerCase() === statusFilter;
@@ -286,7 +307,7 @@ export default function AdminOrdersPage() {
     return filteredOrders.reduce(
       (acc, order) => {
         const orderStatus = String(
-          order?.orderStatus || order?.status || ""
+          order?.orderStatus || order?.status || "",
         ).toLowerCase();
         const paymentStatus = String(order?.paymentStatus || "").toLowerCase();
 
@@ -303,7 +324,7 @@ export default function AdminOrdersPage() {
         totalAmount: 0,
         newOrders: 0,
         paidOrders: 0,
-      }
+      },
     );
   }, [filteredOrders]);
 
@@ -369,7 +390,9 @@ export default function AdminOrdersPage() {
         <div className="mb-5 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Order Directory</h2>
+              <h2 className="text-lg font-bold text-gray-900">
+                Order Directory
+              </h2>
               <p className="mt-1 text-sm text-gray-500">
                 Search, filter and update all store orders.
               </p>
@@ -445,11 +468,15 @@ export default function AdminOrdersPage() {
             <div className="space-y-4">
               {filteredOrders.map((order) => {
                 const customerName =
-                  order?.customer?.name || order?.customerName || "Unknown Customer";
-                const customerPhone = order?.customer?.phone || order?.phone || "-";
+                  order?.customer?.name ||
+                  order?.customerName ||
+                  "Unknown Customer";
+                const customerPhone =
+                  order?.customer?.phone || order?.phone || "-";
                 const customerAddress =
                   order?.customer?.address || order?.address || "-";
-                const orderStatus = order?.orderStatus || order?.status || "new";
+                const orderStatus =
+                  order?.orderStatus || order?.status || "new";
                 const paymentStatus = order?.paymentStatus || "pending";
 
                 return (
@@ -468,7 +495,7 @@ export default function AdminOrdersPage() {
 
                           <span
                             className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getOrderStatusBadge(
-                              orderStatus
+                              orderStatus,
                             )}`}
                           >
                             {String(orderStatus).charAt(0).toUpperCase() +
@@ -477,7 +504,7 @@ export default function AdminOrdersPage() {
 
                           <span
                             className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getPaymentStatusBadge(
-                              paymentStatus
+                              paymentStatus,
                             )}`}
                           >
                             {String(paymentStatus).charAt(0).toUpperCase() +
@@ -493,7 +520,10 @@ export default function AdminOrdersPage() {
                       <div className="text-right">
                         <p className="text-xs text-gray-500">Order Total</p>
                         <p className="text-lg font-extrabold text-[#128c7e]">
-                          ₹{Number(order?.totalAmount || 0).toLocaleString("en-IN")}
+                          ₹
+                          {Number(order?.totalAmount || 0).toLocaleString(
+                            "en-IN",
+                          )}
                         </p>
                       </div>
                     </div>
@@ -507,29 +537,40 @@ export default function AdminOrdersPage() {
 
                           <div className="mt-3 space-y-2 text-sm text-gray-700">
                             <p>
-                              <span className="font-semibold text-gray-900">Name:</span>{" "}
+                              <span className="font-semibold text-gray-900">
+                                Name:
+                              </span>{" "}
                               {customerName}
                             </p>
                             <p>
-                              <span className="font-semibold text-gray-900">Phone:</span>{" "}
+                              <span className="font-semibold text-gray-900">
+                                Phone:
+                              </span>{" "}
                               {customerPhone}
                             </p>
                             <p>
-                              <span className="font-semibold text-gray-900">Address:</span>{" "}
+                              <span className="font-semibold text-gray-900">
+                                Address:
+                              </span>{" "}
                               {customerAddress}
                             </p>
                             <p>
-                              <span className="font-semibold text-gray-900">Payment Method:</span>{" "}
+                              <span className="font-semibold text-gray-900">
+                                Payment Method:
+                              </span>{" "}
                               {order?.paymentMethod || "COD"}
                             </p>
                             <p>
-                              <span className="font-semibold text-gray-900">Items Count:</span>{" "}
+                              <span className="font-semibold text-gray-900">
+                                Items Count:
+                              </span>{" "}
                               {getItemsCount(order?.items)}
                             </p>
                           </div>
                         </div>
 
-                        {(order?.razorpayOrderId || order?.razorpayPaymentId) && (
+                        {(order?.razorpayOrderId ||
+                          order?.razorpayPaymentId) && (
                           <div className="mt-4 rounded-2xl bg-gray-50 p-4">
                             <h3 className="text-sm font-bold text-gray-900">
                               Payment Reference
@@ -557,7 +598,8 @@ export default function AdminOrdersPage() {
                           </div>
                         )}
 
-                        {Array.isArray(order?.items) && order.items.length > 0 ? (
+                        {Array.isArray(order?.items) &&
+                        order.items.length > 0 ? (
                           <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
                             <div className="bg-gray-50 px-4 py-3">
                               <h4 className="text-sm font-bold text-gray-900">
@@ -569,11 +611,21 @@ export default function AdminOrdersPage() {
                               <table className="w-full min-w-[720px]">
                                 <thead>
                                   <tr className="border-b border-gray-100 bg-white text-left text-xs uppercase tracking-wide text-gray-400">
-                                    <th className="px-4 py-3 font-semibold">Product</th>
-                                    <th className="px-4 py-3 font-semibold">Category</th>
-                                    <th className="px-4 py-3 font-semibold">Qty</th>
-                                    <th className="px-4 py-3 font-semibold">Price</th>
-                                    <th className="px-4 py-3 font-semibold">Subtotal</th>
+                                    <th className="px-4 py-3 font-semibold">
+                                      Product
+                                    </th>
+                                    <th className="px-4 py-3 font-semibold">
+                                      Category
+                                    </th>
+                                    <th className="px-4 py-3 font-semibold">
+                                      Qty
+                                    </th>
+                                    <th className="px-4 py-3 font-semibold">
+                                      Price
+                                    </th>
+                                    <th className="px-4 py-3 font-semibold">
+                                      Subtotal
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -592,7 +644,10 @@ export default function AdminOrdersPage() {
                                         {item?.quantity || 0}
                                       </td>
                                       <td className="px-4 py-3 text-sm text-gray-700">
-                                        ₹{Number(item?.price || 0).toLocaleString("en-IN")}
+                                        ₹
+                                        {Number(
+                                          item?.price || 0,
+                                        ).toLocaleString("en-IN")}
                                       </td>
                                       <td className="px-4 py-3 text-sm font-bold text-gray-900">
                                         ₹
@@ -624,14 +679,19 @@ export default function AdminOrdersPage() {
                               <select
                                 value={orderStatus}
                                 onChange={(e) =>
-                                  handleStatusUpdate(order.id, "orderStatus", e.target.value)
+                                  handleStatusUpdate(
+                                    order.id,
+                                    "orderStatus",
+                                    e.target.value,
+                                  )
                                 }
                                 disabled={updatingId === order.id}
                                 className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#128c7e] disabled:opacity-60"
                               >
                                 {ORDER_STATUS_OPTIONS.map((status) => (
                                   <option key={status} value={status}>
-                                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                                    {status.charAt(0).toUpperCase() +
+                                      status.slice(1)}
                                   </option>
                                 ))}
                               </select>
@@ -647,7 +707,7 @@ export default function AdminOrdersPage() {
                                   handleStatusUpdate(
                                     order.id,
                                     "paymentStatus",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 disabled={updatingId === order.id}
@@ -655,7 +715,8 @@ export default function AdminOrdersPage() {
                               >
                                 {PAYMENT_STATUS_OPTIONS.map((status) => (
                                   <option key={status} value={status}>
-                                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                                    {status.charAt(0).toUpperCase() +
+                                      status.slice(1)}
                                   </option>
                                 ))}
                               </select>
@@ -667,7 +728,10 @@ export default function AdminOrdersPage() {
                                   Amount
                                 </p>
                                 <p className="mt-2 text-lg font-bold text-gray-900">
-                                  ₹{Number(order?.totalAmount || 0).toLocaleString("en-IN")}
+                                  ₹
+                                  {Number(
+                                    order?.totalAmount || 0,
+                                  ).toLocaleString("en-IN")}
                                 </p>
                               </div>
 

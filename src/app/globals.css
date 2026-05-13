@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #111827;
 }
 
 @theme inline {
@@ -12,15 +12,106 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* 
+   IMPORTANT:
+   Removed prefers-color-scheme: dark because your app UI is designed
+   with light cards, white inputs, and dark text.
+*/
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* =========================================================
+   GLOBAL FORM FIELD VISIBILITY FIX
+   Fixes invisible text/placeholders in browser dark mode
+========================================================= */
+
+input,
+textarea,
+select {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+  caret-color: #111827 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+select option {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Number input arrows should stay normal */
+input[type="number"] {
+  color-scheme: light;
+}
+
+/* Disabled inputs */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+/* Chrome/Safari autofill fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111827 !important;
+  box-shadow: 0 0 0px 1000px #ffffff inset !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Labels and common form text */
+label,
+form {
+  color: #111827;
+}
+
+small,
+.helper-text,
+.help-text,
+.description-text,
+.form-hint {
+  color: #6b7280 !important;
+}
+
+/* Tables */
+table,
+thead,
+tbody,
+tr,
+td,
+th {
+  color: #111827;
+}
+
+/* Modals/dialogs */
+dialog {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+/* Buttons should not be auto-darkened by browser */
+button {
+  color-scheme: light;
 }

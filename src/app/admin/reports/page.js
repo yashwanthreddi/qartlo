@@ -83,6 +83,32 @@ function getOrderTimestamp(order) {
   return 0;
 }
 
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "").slice(-10);
+}
+
+function getCustomerName(order) {
+  return (
+    order?.customer?.name ||
+    order?.customerName ||
+    order?.name ||
+    "Customer"
+  );
+}
+
+function getCustomerPhone(order) {
+  return (
+    order?.customer?.phone ||
+    order?.customerPhone ||
+    order?.phone ||
+    ""
+  );
+}
+
+function getOrderAmount(order) {
+  return Number(order?.totalAmount ?? order?.amount ?? order?.total ?? 0);
+}
+
 export default function AdminReportsPage() {
   const { user, loading: authLoading } = useAuth();
 
@@ -163,7 +189,7 @@ export default function AdminReportsPage() {
 
   const report = useMemo(() => {
     const totalRevenue = orders.reduce(
-      (sum, order) => sum + Number(order?.totalAmount || 0),
+      (sum, order) => sum + getOrderAmount(order),
       0
     );
 
@@ -177,22 +203,36 @@ export default function AdminReportsPage() {
     const monthlySalesMap = new Map();
 
     orders.forEach((order) => {
-      const customerName =
-        order?.customer?.name || order?.customerName || "Customer";
-      const customerPhone = order?.customer?.phone || order?.phone || "-";
-      const customerKey = String(customerPhone || customerName).trim();
+      const customerName = getCustomerName(order);
+      const customerPhone = getCustomerPhone(order);
+      const normalizedPhone = normalizePhone(customerPhone);
+      const fallbackKey = String(customerName || "").trim().toLowerCase();
+      const customerKey = normalizedPhone || fallbackKey;
 
-      if (!customerMap.has(customerKey)) {
-        customerMap.set(customerKey, {
-          name: customerName,
-          phone: customerPhone,
-          spend: 0,
-          orders: 0,
-        });
+      if (customerKey) {
+        if (!customerMap.has(customerKey)) {
+          customerMap.set(customerKey, {
+            name: customerName,
+            phone: customerPhone || "-",
+            spend: 0,
+            orders: 0,
+            lastOrderAt: 0,
+          });
+        }
+
+        const customer = customerMap.get(customerKey);
+        const orderAmount = getOrderAmount(order);
+        const orderTime = getOrderTimestamp(order);
+
+        customer.spend += orderAmount;
+        customer.orders += 1;
+
+        if (orderTime >= Number(customer.lastOrderAt || 0)) {
+          customer.lastOrderAt = orderTime;
+          customer.name = customerName || customer.name;
+          customer.phone = customerPhone || customer.phone;
+        }
       }
-
-      customerMap.get(customerKey).spend += Number(order?.totalAmount || 0);
-      customerMap.get(customerKey).orders += 1;
 
       if (Array.isArray(order?.items)) {
         order.items.forEach((item) => {
@@ -239,7 +279,7 @@ export default function AdminReportsPage() {
           });
         }
 
-        monthlySalesMap.get(key).revenue += Number(order?.totalAmount || 0);
+        monthlySalesMap.get(key).revenue += getOrderAmount(order);
         monthlySalesMap.get(key).orders += 1;
       }
     });
@@ -264,9 +304,11 @@ export default function AdminReportsPage() {
       a.month.localeCompare(b.month)
     );
 
-    const topCustomers = Array.from(customerMap.values())
-      .sort((a, b) => b.spend - a.spend)
-      .slice(0, 5);
+    const allCustomers = Array.from(customerMap.values()).sort(
+      (a, b) => b.spend - a.spend
+    );
+
+    const topCustomers = allCustomers.slice(0, 5);
 
     return {
       totalRevenue,
@@ -279,6 +321,7 @@ export default function AdminReportsPage() {
       revenueByCategory,
       monthlySales,
       topCustomers,
+      allCustomers,
     };
   }, [orders, products]);
 
@@ -312,12 +355,19 @@ export default function AdminReportsPage() {
   const exportOrders = () => {
     exportCsv(
       "orders.csv",
-      ["Order ID", "Customer", "Phone", "Amount", "Payment Status", "Order Status"],
+      [
+        "Order ID",
+        "Customer",
+        "Phone",
+        "Amount",
+        "Payment Status",
+        "Order Status",
+      ],
       orders.map((order) => [
         order?.id || "",
-        order?.customer?.name || order?.customerName || "",
-        order?.customer?.phone || order?.phone || "",
-        order?.totalAmount || 0,
+        getCustomerName(order),
+        getCustomerPhone(order),
+        getOrderAmount(order),
         order?.paymentStatus || "",
         order?.orderStatus || order?.status || "",
       ])
@@ -342,7 +392,7 @@ export default function AdminReportsPage() {
     exportCsv(
       "customers.csv",
       ["Customer", "Phone", "Total Spend", "Orders"],
-      report.topCustomers.map((customer) => [
+      report.allCustomers.map((customer) => [
         customer?.name || "",
         customer?.phone || "",
         customer?.spend || 0,
@@ -422,7 +472,9 @@ export default function AdminReportsPage() {
         <ReportCard title="Top Customers by Spend" icon="🏅">
           <ProgressList
             items={report.topCustomers.map((customer) => ({
-              label: `${customer.name} (${String(customer.phone || "").slice(-4)})`,
+              label: `${customer.name} (${String(customer.phone || "").slice(
+                -4
+              )})`,
               spend: customer.spend,
             }))}
             labelKey="label"

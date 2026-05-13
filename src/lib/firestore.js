@@ -325,7 +325,7 @@ export async function createStore(data) {
 
       customDomains: normalizedCustomDomains,
       primaryDomain,
-      customDomainStatus: toTrimmedString(data.customDomainStatus || ""),
+     
 
       phone: toTrimmedString(data.phone),
       address: toTrimmedString(data.address),
@@ -384,8 +384,7 @@ export async function updateStore(storeId, data) {
 
       customDomains: normalizedCustomDomains,
       primaryDomain,
-      customDomainStatus: toTrimmedString(data.customDomainStatus || ""),
-
+     
       phone: toTrimmedString(data.phone),
       address: toTrimmedString(data.address),
       storeDescription: toTrimmedString(data.storeDescription),

@@ -7,6 +7,22 @@ function getSafeColor(color, fallback) {
   return String(color || "").trim() || fallback;
 }
 
+function getUniqueImages(product) {
+  if (!product) return [];
+
+  const images = [];
+
+  if (product.image) {
+    images.push(product.image);
+  }
+
+  if (Array.isArray(product.images)) {
+    images.push(...product.images);
+  }
+
+  return [...new Set(images.filter(Boolean))].slice(0, 4);
+}
+
 export default function ProductDetailSheet({
   product,
   onClose,
@@ -17,6 +33,8 @@ export default function ProductDetailSheet({
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
 
+  const images = useMemo(() => getUniqueImages(product), [product]);
+
   useEffect(() => {
     if (product) {
       setQty(1);
@@ -24,33 +42,17 @@ export default function ProductDetailSheet({
     }
   }, [product]);
 
-  /* ✅ SAFE IMAGES */
-  const images = useMemo(() => {
-    if (!product) return [];
-
-    if (Array.isArray(product.images)) {
-      return product.images.filter(Boolean).slice(0, 4);
-    }
-
-    if (product.image) return [product.image];
-
-    return [];
-  }, [product]);
-
   if (!product) return null;
 
-  /* ✅ SAFE STOCK */
   const stockRaw = Number(product?.stock ?? 0);
   const stockValue = Number.isFinite(stockRaw) ? stockRaw : 0;
 
   const isOutOfStock = stockValue <= 0;
   const isLowStock = stockValue > 0 && stockValue <= 5;
 
-  /* ✅ SAFE STORE CONFIG */
   const showOutOfStock = store?.catalogConfig?.showOutOfStock !== false;
   if (isOutOfStock && !showOutOfStock) return null;
 
-  /* ✅ SAFE PRICE */
   const priceRaw = Number(product?.price || 0);
   const price = Number.isFinite(priceRaw) ? priceRaw : 0;
 
@@ -61,15 +63,16 @@ export default function ProductDetailSheet({
 
   const isStoreDisabled =
     store?.isActive === false ||
-    privateStore?.storeTimings?.acceptOrdersNow === false;
-
-  /* ---------------- HANDLERS ---------------- */
+    privateStore?.storeTimings?.acceptOrdersNow === false ||
+    privateStore?.storeTimings?.vacationMode === true ||
+    privateStore?.storeTimings?.temporaryClosure === true;
 
   const handleIncrease = () => {
     if (qty >= stockValue) {
       alert(`Only ${stockValue} items remaining`);
       return;
     }
+
     setQty((q) => q + 1);
   };
 
@@ -99,6 +102,7 @@ export default function ProductDetailSheet({
 
   const goPrev = () => {
     if (images.length <= 1) return;
+
     setActiveImage((prev) =>
       prev === 0 ? images.length - 1 : prev - 1
     );
@@ -106,12 +110,11 @@ export default function ProductDetailSheet({
 
   const goNext = () => {
     if (images.length <= 1) return;
+
     setActiveImage((prev) =>
       prev === images.length - 1 ? 0 : prev + 1
     );
   };
-
-  /* ---------------- UI ---------------- */
 
   return (
     <div
@@ -122,7 +125,6 @@ export default function ProductDetailSheet({
         className="max-h-[94vh] w-full overflow-y-auto rounded-t-[28px] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER */}
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur">
           <div className="flex justify-center pt-3">
             <div className="h-1.5 w-14 rounded-full bg-gray-300" />
@@ -133,13 +135,13 @@ export default function ProductDetailSheet({
               type="button"
               onClick={() => onClose?.()}
               className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-gray-200"
+              aria-label="Close product details"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* IMAGE */}
         <div className="px-4 pt-3">
           <div className="relative overflow-hidden rounded-[24px] bg-[#f6f7f9]">
             {images.length > 0 ? (
@@ -157,18 +159,24 @@ export default function ProductDetailSheet({
                     <button
                       type="button"
                       onClick={goPrev}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow"
+                      className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow"
+                      aria-label="Previous image"
                     >
-                      <ChevronLeft />
+                      <ChevronLeft size={22} />
                     </button>
 
                     <button
                       type="button"
                       onClick={goNext}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow"
+                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow"
+                      aria-label="Next image"
                     >
-                      <ChevronRight />
+                      <ChevronRight size={22} />
                     </button>
+
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
+                      {activeImage + 1} / {images.length}
+                    </div>
                   </>
                 ) : null}
               </>
@@ -178,9 +186,32 @@ export default function ProductDetailSheet({
               </div>
             )}
           </div>
+
+          {images.length > 1 ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {images.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  onClick={() => setActiveImage(index)}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border bg-gray-100 ${
+                    activeImage === index
+                      ? "border-gray-900"
+                      : "border-gray-200"
+                  }`}
+                  aria-label={`Open image ${index + 1}`}
+                >
+                  <img
+                    src={image}
+                    alt={`${product?.name || "Product"} ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
-        {/* DETAILS */}
         <div className="px-4 pb-28 pt-5">
           <h2 className="text-xl font-bold">
             {product?.name || "Product"}
@@ -192,9 +223,7 @@ export default function ProductDetailSheet({
 
           <div className="mt-3">
             {isOutOfStock ? (
-              <span className="font-medium text-red-500">
-                Out of stock
-              </span>
+              <span className="font-medium text-red-500">Out of stock</span>
             ) : (
               <span className="text-sm text-gray-700">
                 Available: {stockValue}
@@ -210,7 +239,6 @@ export default function ProductDetailSheet({
           ) : null}
         </div>
 
-        {/* FOOTER */}
         <div className="sticky bottom-0 border-t bg-white p-4">
           <div className="flex items-center justify-between">
             {!isOutOfStock ? (
@@ -249,8 +277,8 @@ export default function ProductDetailSheet({
               {isStoreDisabled
                 ? "Unavailable"
                 : isOutOfStock
-                ? "Out of Stock"
-                : `Add ${qty} • ₹${totalPrice.toLocaleString("en-IN")}`}
+                  ? "Out of Stock"
+                  : `Add ${qty} • ₹${totalPrice.toLocaleString("en-IN")}`}
             </button>
           </div>
         </div>

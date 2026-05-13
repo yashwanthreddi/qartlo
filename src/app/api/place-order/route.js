@@ -26,8 +26,6 @@ function generateOrderId() {
   return `ORD_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 }
 
-
-
 function buildError(message, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
@@ -100,6 +98,7 @@ function parseCurl(curlCommand = "") {
 
   const headerRegex = /(?:-H|--header)\s+(['"])(.*?)\1/gi;
   let headerMatch;
+
   while ((headerMatch = headerRegex.exec(normalized)) !== null) {
     const headerLine = headerMatch[2];
     const separatorIndex = headerLine.indexOf(":");
@@ -112,8 +111,8 @@ function parseCurl(curlCommand = "") {
   }
 
   const dataMatch =
-    normalized.match(/(?:--data-raw|--data|--data-binary)\s+'([\s\S]*?)'/i) ||
-    normalized.match(/(?:--data-raw|--data|--data-binary)\s+"([\s\S]*?)"/i);
+    normalized.match(/(?:--data-raw|--data|--data-binary|-d)\s+'([\s\S]*?)'/i) ||
+    normalized.match(/(?:--data-raw|--data|--data-binary|-d)\s+"([\s\S]*?)"/i);
 
   if (dataMatch?.[1]) {
     result.body = dataMatch[1];
@@ -130,7 +129,7 @@ async function sendConfiguredWebhook(webhookValue = "", payload = {}) {
       attempted: false,
       ok: false,
       status: 0,
-      message: "Webhook not configured",
+      message: "Webhook is not configured.",
       responseText: "",
     };
   }
@@ -154,7 +153,7 @@ async function sendConfiguredWebhook(webhookValue = "", payload = {}) {
         attempted: true,
         ok: false,
         status: 0,
-        message: "Could not detect webhook URL from cURL",
+        message: "Could not detect webhook URL",
         responseText: "",
       };
     }
@@ -169,6 +168,7 @@ async function sendConfiguredWebhook(webhookValue = "", payload = {}) {
       if (!headers["Content-Type"] && !headers["content-type"]) {
         headers["Content-Type"] = "application/json";
       }
+
       finalBody = JSON.stringify(payload);
     }
   } else {
@@ -219,6 +219,7 @@ export async function POST(request) {
     }
 
     let body;
+
     try {
       body = await request.json();
     } catch {
@@ -244,6 +245,7 @@ export async function POST(request) {
     const requestedTotalAmount = toNumber(body?.totalAmount);
 
     const rawItems = Array.isArray(body?.items) ? body.items : [];
+
     const items = rawItems
       .map((item) => ({
         id: toString(item?.id),
@@ -345,10 +347,8 @@ export async function POST(request) {
       return buildError(`Maximum ${maximumOrderQuantity} items allowed`, 400);
     }
 
-    if (paymentMethod === "cod") {
-      if (!codEnabled) {
-        return buildError("COD is not available for this store", 400);
-      }
+    if (paymentMethod === "cod" && !codEnabled) {
+      return buildError("COD is not available for this store", 400);
     }
 
     if (paymentMethod === "online") {
@@ -387,7 +387,10 @@ export async function POST(request) {
       }
 
       if (stock < qty) {
-        return buildError(`Only ${stock} left for ${toString(product?.name)}`, 400);
+        return buildError(
+          `Only ${stock} left for ${toString(product?.name)}`,
+          400
+        );
       }
 
       const itemSubtotal = price * qty;
@@ -417,7 +420,10 @@ export async function POST(request) {
     if (deliverySettings?.deliveryEnabled === false) {
       finalDeliveryCharge = 0;
     } else {
-      const configuredDeliveryCharge = toNumber(deliverySettings?.deliveryCharge);
+      const configuredDeliveryCharge = toNumber(
+        deliverySettings?.deliveryCharge
+      );
+
       const freeDeliveryThreshold = toNumber(
         deliverySettings?.freeDeliveryThreshold
       );
@@ -452,11 +458,9 @@ export async function POST(request) {
 
     const now = new Date();
     const orderId = generateOrderId();
-    
 
     const orderDoc = {
       orderId,
-     
 
       storeId,
       storeSlug,
@@ -472,7 +476,7 @@ export async function POST(request) {
 
       paymentMethod: "cod",
       paymentStatus: "pending",
-      orderStatus: "placed",
+      orderStatus: "new",
 
       notes,
 
@@ -493,7 +497,10 @@ export async function POST(request) {
     savedOrderItems.forEach((item, index) => {
       const productSnap = productSnaps[index];
       const product = productSnap.data() || {};
-      const currentStock = toNumber(product?.stock ?? product?.availableStock ?? 0);
+      const currentStock = toNumber(
+        product?.stock ?? product?.availableStock ?? 0
+      );
+
       const newStock = Math.max(0, currentStock - toNumber(item.quantity));
 
       batch.update(productsRef.doc(item.id), {
@@ -514,55 +521,120 @@ export async function POST(request) {
     let webhookResponseText = "";
 
     try {
-      const webhookValue =
-        toString(privateData?.webhooks?.orderConfirmedCustomer) ||
-        toString(privateData?.automations?.orderConfirmedCustomer?.curl) ||
-        toString(privateData?.automations?.orderConfirmedCustomer?.url);
+      const webhookPayload = {
+        event: "order_created",
 
-      if (webhookValue) {
-        const webhookPayload = {
-          order_id: orderId,
-         
-          store_id: storeId,
-          store_slug: storeSlug,
-          store_name: toString(storeData?.storeName),
-          store_phone: toString(
-            privateData?.storeProfile?.phone ||
-              privateData?.storePhone ||
-              storeData?.phone
-          ),
-          customer_name: customer.name,
-          customer_phone: customer.phone,
-          customer_email: customer.email,
-          customer_address: customer.address,
-          customer_city: customer.city,
-          customer_pincode: customer.pincode,
-          payment_method: "cod",
-          payment_status: "pending",
-          order_status: "placed",
-          subtotal: computedSubtotal,
-          delivery_charge: finalDeliveryCharge,
-          order_total: finalTotalAmount,
-          notes,
-          triggered_at: now.toISOString(),
-        };
+        order_id: orderId,
 
-        const webhookResult = await sendConfiguredWebhook(
-          webhookValue,
-          webhookPayload
-        );
+        store_id: storeId,
+        store_slug: storeSlug,
+        store_name: toString(storeData?.storeName),
+        store_phone: toString(
+          privateData?.storeProfile?.phone ||
+            privateData?.storePhone ||
+            storeData?.phone
+        ),
 
-        webhookTriggered = webhookResult.ok;
-        webhookStatus = webhookResult.status || 0;
-        webhookResponseText = webhookResult.responseText || "";
+        customer_name: customer.name,
+        customer_phone: customer.phone,
+        customer_email: customer.email,
+        customer_address: customer.address,
+        customer_city: customer.city,
+        customer_pincode: customer.pincode,
 
-        if (!webhookResult.ok) {
-          webhookError =
-            webhookResult.message ||
-            webhookResult.responseText ||
-            "Webhook trigger failed";
+        payment_method: "cod",
+        payment_status: "pending",
+        order_status: "new",
+
+        subtotal: computedSubtotal,
+        delivery_charge: finalDeliveryCharge,
+        order_total: finalTotalAmount,
+
+        items: savedOrderItems,
+
+        notes,
+        triggered_at: now.toISOString(),
+      };
+
+      const webhookResults = [];
+
+      const webhookConfigs = [
+        {
+          key: "wh1",
+          name: "Order Confirmed → Customer",
+          config: privateData?.webhooks?.wh1 || privateData?.wh1,
+        },
+        {
+          key: "wh3",
+          name: "New Order Alert → Admin",
+          config: privateData?.webhooks?.wh3 || privateData?.wh3,
+        },
+      ];
+
+      for (const webhook of webhookConfigs) {
+        const config = webhook.config || {};
+
+        const enabled = config?.enabled === true;
+
+        const webhookValue = enabled
+          ? toString(config?.curl || config?.url || config?.webhookUrl)
+          : "";
+
+        if (!webhookValue) {
+          webhookResults.push({
+            key: webhook.key,
+            name: webhook.name,
+            triggered: false,
+            status: 0,
+            error: "Webhook is disabled or URL is missing",
+          });
+
+          continue;
+        }
+
+        try {
+          const result = await sendConfiguredWebhook(webhookValue, {
+            ...webhookPayload,
+            webhook_key: webhook.key,
+            webhook_name: webhook.name,
+          });
+
+          webhookResults.push({
+            key: webhook.key,
+            name: webhook.name,
+            triggered: result.ok,
+            status: result.status || 0,
+            error: result.ok
+              ? ""
+              : result.message || result.responseText || "Webhook trigger failed",
+            responseText: result.responseText || "",
+          });
+        } catch (err) {
+          webhookResults.push({
+            key: webhook.key,
+            name: webhook.name,
+            triggered: false,
+            status: 0,
+            error: toString(err?.message || "Webhook trigger failed"),
+          });
         }
       }
+
+      webhookTriggered = webhookResults.some((item) => item.triggered);
+
+      webhookStatus =
+        webhookResults.find((item) => item.key === "wh3")?.status ||
+        webhookResults.find((item) => item.triggered)?.status ||
+        0;
+
+      webhookError = webhookResults
+        .filter((item) => !item.triggered)
+        .map((item) => `${item.name}: ${item.error}`)
+        .join(" | ");
+
+      webhookResponseText = JSON.stringify(webhookResults);
+
+      console.log("Order created webhook results:", webhookResults);
     } catch (err) {
       webhookTriggered = false;
       webhookError = toString(err?.message || "Webhook trigger failed");
@@ -572,10 +644,11 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       orderId,
-      
+
       paymentMethod: "cod",
       paymentStatus: "pending",
-      orderStatus: "placed",
+      orderStatus: "new",
+
       webhookTriggered,
       webhookStatus,
       webhookError,

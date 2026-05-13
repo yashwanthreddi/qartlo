@@ -49,7 +49,7 @@ const DEFAULT_FORM = {
   storeDescription: "",
 
   customDomain: "",
-  customDomainStatus: "",
+  
 
   storeLogo: "",
   themeColor: "#128c7e",
@@ -234,7 +234,9 @@ function InlineSectionNotice({ type = "success", message }) {
       : "border-green-200 bg-green-50 text-green-700";
 
   return (
-    <div className={`rounded-2xl border px-4 py-2 text-xs font-semibold ${styles}`}>
+    <div
+      className={`rounded-2xl border px-4 py-2 text-xs font-semibold ${styles}`}
+    >
       {message}
     </div>
   );
@@ -457,10 +459,10 @@ export default function AdminSettingsPage() {
         const savedCategoriesRaw = Array.isArray(privateData?.customCategories)
           ? privateData.customCategories
           : Array.isArray(storeData?.catalogConfig?.customCategories)
-          ? storeData.catalogConfig.customCategories
-          : Array.isArray(storeData?.customCategories)
-          ? storeData.customCategories
-          : [];
+            ? storeData.catalogConfig.customCategories
+            : Array.isArray(storeData?.customCategories)
+              ? storeData.customCategories
+              : [];
 
         const savedCategories = savedCategoriesRaw
           .map((category, index) => normalizeCategoryItem(category, index))
@@ -486,7 +488,7 @@ export default function AdminSettingsPage() {
             (Array.isArray(storeData?.customDomains)
               ? storeData.customDomains[0] || ""
               : ""),
-          customDomainStatus: storeData?.customDomainStatus || "",
+         
 
           storeLogo: privateData?.branding?.storeLogo || "",
           themeColor: privateData?.branding?.themeColor || "#128c7e",
@@ -535,8 +537,7 @@ export default function AdminSettingsPage() {
           bankTransferEnabled:
             privateData?.paymentMethods?.bankTransferEnabled === true,
 
-          acceptOrdersNow:
-            privateData?.storeTimings?.acceptOrdersNow ?? true,
+          acceptOrdersNow: privateData?.storeTimings?.acceptOrdersNow ?? true,
 
           webhooks: {
             wh1: {
@@ -685,7 +686,10 @@ export default function AdminSettingsPage() {
         (file.type === "image/svg+xml" ? "svg" : "png");
       const safeName = `${field}-${Date.now()}.${extension}`;
 
-      const storageRef = ref(storage, `stores/${store.id}/branding/${safeName}`);
+      const storageRef = ref(
+        storage,
+        `stores/${store.id}/branding/${safeName}`,
+      );
 
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
@@ -697,7 +701,7 @@ export default function AdminSettingsPage() {
 
       setSectionSuccess(
         "branding",
-        "Image uploaded. Click Save Branding to update settings."
+        "Image uploaded. Click Save Branding to update settings.",
       );
     } catch (err) {
       console.error("Image upload error:", err);
@@ -722,7 +726,7 @@ export default function AdminSettingsPage() {
 
     setSectionSuccess(
       "branding",
-      "Image removed. Click Save Branding to update settings."
+      "Image removed. Click Save Branding to update settings.",
     );
   }
 
@@ -836,7 +840,7 @@ export default function AdminSettingsPage() {
                 slug,
                 name,
               }
-            : category
+            : category,
         ),
       }));
 
@@ -852,7 +856,7 @@ export default function AdminSettingsPage() {
               ...category,
               [field]: value,
             }
-          : category
+          : category,
       ),
     }));
 
@@ -943,14 +947,17 @@ export default function AdminSettingsPage() {
       const cleanDomain = normalizeCustomDomain(form.customDomain);
 
       if (cleanDomain && !isValidDomain(cleanDomain)) {
-        setSectionError("domain", "Enter a valid domain like shop.yourdomain.com.");
+        setSectionError(
+          "domain",
+          "Enter a valid domain like shop.yourdomain.com.",
+        );
         return false;
       }
 
       if (cleanDomain && isReservedDomain(cleanDomain)) {
         setSectionError(
           "domain",
-          "This domain is reserved and cannot be used as a custom store domain."
+          "This domain is reserved and cannot be used as a custom store domain.",
         );
         return false;
       }
@@ -960,7 +967,7 @@ export default function AdminSettingsPage() {
         const domainQuery = query(
           storesRef,
           where("customDomains", "array-contains", cleanDomain),
-          limit(1)
+          limit(1),
         );
 
         const domainSnap = await getDocs(domainQuery);
@@ -971,7 +978,7 @@ export default function AdminSettingsPage() {
           if (conflictingDoc) {
             setSectionError(
               "domain",
-              "This custom domain is already connected to another store."
+              "This custom domain is already connected to another store.",
             );
             return false;
           }
@@ -1032,7 +1039,7 @@ export default function AdminSettingsPage() {
               acceptOrdersNow: form.acceptOrdersNow,
             },
           },
-          { merge: true }
+          { merge: true },
         );
 
         setStore((prev) =>
@@ -1046,7 +1053,7 @@ export default function AdminSettingsPage() {
                 isActive: form.isActive,
                 storeDescription: form.storeDescription.trim(),
               }
-            : prev
+            : prev,
         );
 
         setForm((prev) => ({
@@ -1064,7 +1071,7 @@ export default function AdminSettingsPage() {
         await updateDoc(storeRef, {
           customDomains: cleanDomain ? [cleanDomain] : [],
           primaryDomain: cleanDomain,
-          customDomainStatus: cleanDomain ? "pending" : "",
+         
           updatedAt: serverTimestamp(),
         });
 
@@ -1074,15 +1081,15 @@ export default function AdminSettingsPage() {
                 ...prev,
                 customDomains: cleanDomain ? [cleanDomain] : [],
                 primaryDomain: cleanDomain,
-                customDomainStatus: cleanDomain ? "pending" : "",
+               
               }
-            : prev
+            : prev,
         );
 
         setForm((prev) => ({
           ...prev,
           customDomain: cleanDomain,
-          customDomainStatus: cleanDomain ? "pending" : "",
+         
         }));
       }
 
@@ -1101,7 +1108,7 @@ export default function AdminSettingsPage() {
               productCardStyle: form.productCardStyle,
             },
           },
-          { merge: true }
+          { merge: true },
         );
       }
 
@@ -1136,7 +1143,7 @@ export default function AdminSettingsPage() {
               productFiltersEnabled: form.productFiltersEnabled,
             },
           },
-          { merge: true }
+          { merge: true },
         );
 
         setStore((prev) =>
@@ -1154,7 +1161,7 @@ export default function AdminSettingsPage() {
                 },
                 customCategories: normalizedCategories,
               }
-            : prev
+            : prev,
         );
 
         setForm((prev) => ({
@@ -1174,7 +1181,7 @@ export default function AdminSettingsPage() {
               codLimitAmount: toNumberOrZero(form.codLimitAmount),
             },
           },
-          { merge: true }
+          { merge: true },
         );
       }
 
@@ -1189,7 +1196,7 @@ export default function AdminSettingsPage() {
               shippingNote: form.shippingNote.trim(),
             },
           },
-          { merge: true }
+          { merge: true },
         );
       }
 
@@ -1214,7 +1221,7 @@ export default function AdminSettingsPage() {
               bankTransferEnabled: form.bankTransferEnabled,
             },
           },
-          { merge: true }
+          { merge: true },
         );
 
         setStore((prev) =>
@@ -1226,7 +1233,7 @@ export default function AdminSettingsPage() {
                   razorpayKeyId: cleanKeyId,
                 },
               }
-            : prev
+            : prev,
         );
       }
 
@@ -1237,7 +1244,7 @@ export default function AdminSettingsPage() {
             ownerId: user.uid,
             webhooks: form.webhooks,
           },
-          { merge: true }
+          { merge: true },
         );
       }
 
@@ -1482,7 +1489,7 @@ export default function AdminSettingsPage() {
               <Field
                 label="Store Slug"
                 hint={`Public link: /${normalizeSlug(
-                  form.slug || "your-store-slug"
+                  form.slug || "your-store-slug",
                 )}`}
               >
                 <Input
@@ -1566,7 +1573,8 @@ export default function AdminSettingsPage() {
             <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
               <p className="font-semibold">Current Store Link</p>
               <p className="mt-1 break-all font-bold">
-                https://app.qartlo.com/{normalizeSlug(form.slug || "your-store-slug")}
+                https://app.qartlo.com/
+                {normalizeSlug(form.slug || "your-store-slug")}
               </p>
             </div>
 
@@ -1581,93 +1589,133 @@ export default function AdminSettingsPage() {
                   value={form.customDomain}
                   onChange={(e) => {
                     clearSectionMessage("domain");
-                    setValue("customDomain", normalizeCustomDomain(e.target.value));
+                    setValue(
+                      "customDomain",
+                      normalizeCustomDomain(e.target.value),
+                    );
                   }}
                   placeholder="shop.yourdomain.com"
                 />
               </Field>
 
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                  Status
-                </p>
-                <p
-                  className={`mt-2 text-lg font-bold ${
-                    form.customDomainStatus === "connected"
-                      ? "text-green-600"
-                      : form.customDomainStatus === "pending"
-                      ? "text-amber-600"
-                      : "text-gray-500"
-                  }`}
-                >
-                  {form.customDomainStatus === "connected"
-                    ? "Connected"
-                    : form.customDomainStatus === "pending"
-                    ? "Pending"
-                    : "Not Connected"}
-                </p>
-              </div>
+             
             </div>
 
             <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
-              <h3 className="font-bold text-blue-950">How to connect your domain</h3>
+              <h3 className="font-bold text-blue-950">
+                How to connect your custom domain
+              </h3>
 
               <div className="mt-4 space-y-4">
                 <div>
-                  <p className="font-semibold">Step 1: Open your domain provider</p>
+                  <p className="font-semibold">Step 1: Save your domain here</p>
                   <p className="mt-1 text-blue-800">
-                    Go to GoDaddy, Hostinger, Namecheap, Cloudflare, or wherever your domain was purchased.
+                    Enter only your domain name, for example{" "}
+                    <span className="font-mono font-semibold">
+                      shop.yourdomain.com
+                    </span>
+                    , and click Save Domain.
+                  </p>
+                  <p className="mt-1 text-blue-800">
+                    Do not add{" "}
+                    <span className="font-mono font-semibold">https://</span>,{" "}
+                    <span className="font-mono font-semibold">http://</span>, or{" "}
+                    <span className="font-mono font-semibold">/</span> at the
+                    end.
                   </p>
                 </div>
 
                 <div>
-                  <p className="font-semibold">Step 2: Open DNS settings</p>
+                  <p className="font-semibold">
+                    Step 2: Qartlo will generate DNS records
+                  </p>
                   <p className="mt-1 text-blue-800">
-                    Find DNS Management, DNS Records, or Manage DNS.
+                    After you save the domain, Qartlo support will add this
+                    domain in Firebase and generate the required DNS records for
+                    your domain.
                   </p>
                 </div>
 
                 <div>
-                  <p className="font-semibold">Step 3: Add DNS record</p>
+                  <p className="font-semibold">
+                    Step 3: Open your domain provider
+                  </p>
+                  <p className="mt-1 text-blue-800">
+                    Go to GoDaddy, Hostinger, Namecheap, Cloudflare, or the
+                    provider where your domain was purchased.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Step 4: Open DNS settings</p>
+                  <p className="mt-1 text-blue-800">
+                    Open DNS Management, DNS Records, Manage DNS, or Zone
+                    Editor.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">
+                    Step 5: Add the DNS records shared by Qartlo
+                  </p>
 
                   <div className="mt-2 overflow-hidden rounded-2xl border border-blue-100 bg-white">
                     <div className="grid grid-cols-3 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold uppercase text-blue-700">
                       <span>Type</span>
-                      <span>Name</span>
+                      <span>Name / Host</span>
                       <span>Value</span>
                     </div>
 
                     <div className="grid grid-cols-3 px-4 py-3 text-xs text-gray-700">
-                      <span className="font-semibold">CNAME</span>
-                      <span>shop</span>
-                      <span className="break-all">Firebase hosting target</span>
-                    </div>
-
-                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
-                      <span className="font-semibold">CNAME</span>
-                      <span>www</span>
-                      <span className="break-all">Firebase hosting target</span>
-                    </div>
-
-                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
                       <span className="font-semibold">A</span>
-                      <span>@</span>
-                      <span className="break-all">Firebase provided IP records</span>
+                      <span className="break-all">Example: shop</span>
+                      <span className="break-all">
+                        Firebase provided IP address
+                      </span>
                     </div>
+
+                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
+                      <span className="font-semibold">TXT</span>
+                      <span className="break-all">Example: shop</span>
+                      <span className="break-all">
+                        Firebase verification value
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 border-t border-blue-100 px-4 py-3 text-xs text-gray-700">
+                      <span className="font-semibold">CNAME</span>
+                      <span className="break-all">
+                        Certificate verification host
+                      </span>
+                      <span className="break-all">
+                        Firebase certificate value
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    <p className="font-semibold">Important</p>
+                    <p className="mt-1">
+                      Use the exact DNS records shared by Qartlo/Firebase. Do
+                      not use random or old DNS values. Every custom domain may
+                      receive different verification and certificate records.
+                    </p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="font-semibold">Step 4: Save domain here</p>
+                  <p className="font-semibold">Step 6: Wait for verification</p>
                   <p className="mt-1 text-blue-800">
-                    Enter only the domain name above and click Save Domain.
+                    DNS verification and SSL certificate activation can take a
+                    few minutes to 24 hours.
                   </p>
                 </div>
 
                 <div>
-                  <p className="font-semibold">Step 5: Wait for verification</p>
+                  <p className="font-semibold">Step 7: Domain becomes active</p>
                   <p className="mt-1 text-blue-800">
-                    DNS updates can take a few minutes to 24 hours.
+                    Once the status becomes Connected, your store will open from
+                    your custom domain.
                   </p>
                 </div>
               </div>
@@ -1675,15 +1723,28 @@ export default function AdminSettingsPage() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-                <p className="font-semibold">Correct</p>
+                <p className="font-semibold">Correct domain format</p>
                 <p className="mt-1 font-mono text-xs">shop.yourdomain.com</p>
                 <p className="mt-1 font-mono text-xs">www.yourdomain.com</p>
+                <p className="mt-2 text-xs">
+                  Enter only the domain name. No https://, no http://, and no /
+                  at the end.
+                </p>
               </div>
 
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                <p className="font-semibold">Wrong</p>
-                <p className="mt-1 font-mono text-xs">https://shop.yourdomain.com/</p>
+                <p className="font-semibold">Wrong domain format</p>
+                <p className="mt-1 font-mono text-xs">
+                  https://shop.yourdomain.com/
+                </p>
+                <p className="mt-1 font-mono text-xs">
+                  http://shop.yourdomain.com
+                </p>
                 <p className="mt-1 font-mono text-xs">app.qartlo.com</p>
+                <p className="mt-2 text-xs">
+                  Do not enter the Qartlo app domain. Enter only your own custom
+                  domain.
+                </p>
               </div>
             </div>
           </SectionCard>
@@ -1691,7 +1752,9 @@ export default function AdminSettingsPage() {
           <SectionCard
             title="3. Branding & Appearance"
             subtitle="Visual identity for your storefront"
-            right={<SectionActions sectionKey="branding" label="Save Branding" />}
+            right={
+              <SectionActions sectionKey="branding" label="Save Branding" />
+            }
           >
             <div className="grid gap-4 md:grid-cols-2">
               <ImageUploadField
@@ -1996,7 +2059,9 @@ export default function AdminSettingsPage() {
           <SectionCard
             title="6. Delivery Settings"
             subtitle="Control delivery charge and notes"
-            right={<SectionActions sectionKey="delivery" label="Save Delivery" />}
+            right={
+              <SectionActions sectionKey="delivery" label="Save Delivery" />
+            }
           >
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Field label="Delivery Charge">
@@ -2036,10 +2101,10 @@ export default function AdminSettingsPage() {
           <SectionCard
             title="7. Payments"
             subtitle="Configure online and offline payment methods"
-            right={<SectionActions sectionKey="payments" label="Save Payments" />}
+            right={
+              <SectionActions sectionKey="payments" label="Save Payments" />
+            }
           >
-            
-
             <div className="mt-4">
               <ToggleRow
                 title="Enable Razorpay"
@@ -2114,14 +2179,17 @@ export default function AdminSettingsPage() {
           <SectionCard
             title="8. Notifications & Webhooks"
             subtitle="Customer and admin notification preferences"
-            right={<SectionActions sectionKey="webhooks" label="Save Webhooks" />}
+            right={
+              <SectionActions sectionKey="webhooks" label="Save Webhooks" />
+            }
           >
             <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-              Paste cURL from Wylto, Interakt, Wati, AiSensy, Gupshup, 2Factor
-              or similar providers. Use variables like {"{{order_id}}"},{" "}
-              {"{{customer_name}}"}, {"{{customer_phone}}"},{" "}
-              {"{{order_total}}"}, {"{{order_status}}"} and{" "}
-              {"{{store_name}}"} inside URL, headers or body.
+              Paste your webhook URL here. Example:
+              https://server.wylto.com/webhook/xxxxxxx Qartlo will send the
+              following data to your webhook: customer_name,customer_phone,
+              order_id,order_status,order_total,store_name,store_phone,triggered_at.
+              <strong>Please paste only the webhook URL</strong>.Do not paste
+              cURL commands, headers, or JSON.
             </div>
 
             <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
