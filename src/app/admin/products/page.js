@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import useAuth from "@/hooks/useAuth";
 import {
   getStoreByOwnerId,
@@ -88,6 +88,39 @@ function normalizeCategoryItem(item) {
     name,
     slug: String(item?.slug || slugify(name)).trim(),
   };
+}
+
+function getExcelCellValue(value) {
+  if (value === null || value === undefined) return "";
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "object") {
+    if (value.text !== undefined) {
+      return String(value.text || "").trim();
+    }
+
+    if (value.result !== undefined) {
+      return String(value.result || "").trim();
+    }
+
+    if (Array.isArray(value.richText)) {
+      return value.richText
+        .map((item) => String(item?.text || ""))
+        .join("")
+        .trim();
+    }
+
+    if (value.hyperlink) {
+      return String(value.text || value.hyperlink || "").trim();
+    }
+
+    return String(value.toString ? value.toString() : "").trim();
+  }
+
+  return String(value).trim();
 }
 
 async function syncUploadedCategoriesToSettings(storeId, uploadedCategoryNames) {
@@ -193,32 +226,63 @@ async function parseUploadedFile(file) {
     });
   }
 
-  if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
+  if (fileName.endsWith(".xlsx")) {
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
 
-    const rows = XLSX.utils.sheet_to_json(worksheet, {
-      defval: "",
-      raw: false,
+    const worksheet = workbook.worksheets[0];
+
+    if (!worksheet) {
+      return [];
+    }
+
+    const headerRow = worksheet.getRow(1);
+
+    const headers = [];
+
+    headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const header = getExcelCellValue(cell.value)
+        .trim()
+        .replace(/^"|"$/g, "")
+        .toLowerCase();
+
+      headers[colNumber] = header;
     });
 
-    return rows.map((row) => {
-      const normalizedRow = {};
+    const rows = [];
 
-      Object.keys(row).forEach((key) => {
-        normalizedRow[String(key).trim().toLowerCase()] = String(
-          row[key] || ""
-        ).trim();
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+
+      const normalizedRow = {};
+      let hasValue = false;
+
+      headers.forEach((header, colNumber) => {
+        if (!header) return;
+
+        const cell = row.getCell(colNumber);
+        const value = getExcelCellValue(cell.value)
+          .trim()
+          .replace(/^"|"$/g, "");
+
+        if (value) {
+          hasValue = true;
+        }
+
+        normalizedRow[header] = value;
       });
 
-      return normalizedRow;
+      if (hasValue) {
+        rows.push(normalizedRow);
+      }
     });
+
+    return rows;
   }
 
-  throw new Error("Unsupported file type");
+  throw new Error("Unsupported file type. Please upload CSV or XLSX file.");
 }
 
 export default function AdminProductsPage() {
@@ -388,6 +452,9 @@ export default function AdminProductsPage() {
       "price",
       "stock",
       "image",
+      "image2",
+      "image3",
+      "image4",
       "description",
     ];
 
@@ -397,7 +464,10 @@ export default function AdminProductsPage() {
         "Clothing",
         "299",
         "20",
-        "https://example.com/tshirt.jpg",
+        "https://example.com/tshirt-1.jpg",
+        "https://example.com/tshirt-2.jpg",
+        "",
+        "",
         "Premium cotton t-shirt",
       ],
       [
@@ -405,7 +475,10 @@ export default function AdminProductsPage() {
         "Footwear",
         "1299",
         "0",
-        "https://example.com/shoes.jpg",
+        "https://example.com/shoes-1.jpg",
+        "",
+        "",
+        "",
         "Comfort running shoes",
       ],
     ];
@@ -531,8 +604,8 @@ export default function AdminProductsPage() {
         `${createdProducts.length} products uploaded successfully. Categories and slugs updated.`
       );
     } catch (error) {
-      console.error("upload failed:", error);
-      alert("Failed to upload file. Use CSV format.");
+      console.error("Upload failed:", error);
+      alert("Failed to upload file. Use CSV or XLSX format.");
     } finally {
       setUploadLoading(false);
 
@@ -637,7 +710,7 @@ export default function AdminProductsPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.xls,.xlsx"
+        accept=".csv,.xlsx"
         onChange={handleFileChange}
         className="hidden"
       />
@@ -660,7 +733,7 @@ export default function AdminProductsPage() {
             disabled={uploadLoading}
             className="rounded-full bg-[#1d6f42] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {uploadLoading ? "Uploading..." : "📄 Upload csv file"}
+            {uploadLoading ? "Uploading..." : "📄 Upload CSV/XLSX file"}
           </button>
 
           <button
@@ -688,12 +761,12 @@ export default function AdminProductsPage() {
         <div className="text-5xl opacity-70">📄</div>
 
         <h3 className="mt-4 text-base font-semibold text-gray-900">
-          Drag & drop csv file or click to upload
+          Drag & drop CSV/XLSX file or click to upload
         </h3>
 
         <p className="mt-2 text-sm text-gray-500">
-          Supports .csv | Download the template to see the required
-          format
+          Supports .csv and .xlsx files. Download the template to see the
+          required format.
         </p>
       </div>
 
